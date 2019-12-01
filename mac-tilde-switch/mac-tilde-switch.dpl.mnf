@@ -1,0 +1,5 @@
+(prefix:scripts)
+
+(os:macos)
+switch.sh
+unswitch.sh
