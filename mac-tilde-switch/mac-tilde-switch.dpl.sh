@@ -2,7 +2,7 @@
 #:author:       Grove Pyree
 #:email:        grayarea@protonmail.ch
 #:revdate:      2019.12.03
-#:revremark:    Execute unswitch script on removal
+#:revremark:    Fix missing stash manipulations
 #:created_at:   2019.06.30
 
 D_DPL_NAME='mac-tilde-switch'
@@ -20,8 +20,6 @@ D_TILDE_UNS_PATH="$D__DPL_ASSET_DIR/unswitch.sh"
 d_dpl_check()
 {
   # Relevant on macOS only; also, rely on stash
-  if ! [ "$D__OS_FAMILY" = macos ]
-  then d__notify -q -- 'This deployment is macOS only'; return 3; fi
   d__stash -- ready || return 3
 
   # Init storage variables; source config; do cut-off checks
@@ -43,12 +41,20 @@ d_dpl_check()
 
 d_dpl_install()
 {
-  d__context -- notch; d__context -- push 'Installing tilde-switch script'
-  local els=( --else-- 'Unable to install' )
-  d__cmd chmod +x --SCRIPT_PATH-- "$D_TILDE_SWS_PATH" "${els[@]}" || return 1
+  d__context -- notch
+  d__context -- push 'Executing tilde-switch script'
   source "$D_TILDE_SWS_PATH" &>/dev/null
-  local cmd='tee'; d__require_wfile "$D_TILDE_PLIST_PATH" || cmd='sudo tee'
-  d__pipe --sb-- cat <<EOF --pipe-- $cmd --PLIST_PATH-- "$D_TILDE_PLIST_PATH" "${els[@]}"
+  if (($?)); then
+    d__fail -- 'Error code agter sourcing tilde-switch script at:' \
+      -i- "$D_TILDE_SWS_PATH"
+    return 1
+  fi
+  d__context -- pop
+  d__context -- push 'Generating .plist task'
+  d__cmd chmod +x --SCRIPT_PATH-- "$D_TILDE_SWS_PATH" \
+    --else-- 'Unable to install' || return 1
+  local tee='tee'; d__require_wfile "$D_TILDE_PLIST_PATH" || tee='sudo tee'
+  d__pipe --sb-- cat <<EOF --pipe-- $tee --PLIST_PATH-- "$D_TILDE_PLIST_PATH" --else-- 'Unable to install' || return 1
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -64,23 +70,46 @@ d_dpl_install()
   </dict>
 </plist>
 EOF
-  (($?)) && return 1
-  d__notify -q -- "Loading .plist into launchctl:" -i- "$D_TILDE_PLIST_PATH"
+  d__context -- pop
+  d__context -- push 'Loading .plist task into launchctl'
   d__require_sudo launchctl
-  if d__cmd sudo launchctl load -w -- --PLIST_PATH-- "$D_TILDE_PLIST_PATH" \
-    "${els[@]}"; then d__context -- lop; return 0; else return 1; fi
+  d__cmd sudo launchctl load -w -- --PLIST_PATH-- "$D_TILDE_PLIST_PATH" \
+    --else-- 'Unable to install' || return 1
+  if ! d__stash -s -- set installed; then
+    d__notify -lx -- 'Failed to set stash record'
+  fi
+  d__context -- lop
+  return 0
 }
 
 d_dpl_remove()
 {
-  d__context -- notch; d__context -- push 'Removing tilde-switch script'
-  local els=( --else-- 'Unable to remove' )
-  d__notify -q -- "Unloading .plist from launchctl:" -i- "$D_TILDE_PLIST_PATH"
+  d__context -- notch
+  d__context -- push 'Removing tilde-switch script'
+  d__context -- push 'Unloading .plist task from launchctl'
   d__require_sudo launchctl
   d__cmd sudo launchctl unload -w -- --PLIST_PATH-- "$D_TILDE_PLIST_PATH" \
-    "${els[@]}" || return 1
-  local cmd='rm'; d__require_wfile "$D_TILDE_PLIST_PATH" || cmd='sudo rm'
-  if d__cmd $cmd -f -- --PLIST_PATH-- "$D_TILDE_PLIST_PATH" "${els[@]}"
-  then source "$D_TILDE_UNS_PATH" &>/dev/null; d__context -- lop; return 0
-  else return 1; fi
+    --else-- 'Unable to undo tilde-switch' || return 1
+  if ! d__stash -s -- unset installed; then
+    d__notify -lx -- 'Failed to unset stash record'
+  fi
+  d__context -- pop
+  d__context -- push 'Erasing .plist task'
+  local rm='rm'; d__require_wfile "$D_TILDE_PLIST_PATH" || rm='sudo rm'
+  if ! d__cmd $rm -f -- --PLIST_PATH-- "$D_TILDE_PLIST_PATH" \
+    --else-- 'File has to be removed manually'
+  then
+    d__notify -l! -- 'Tilde-switch will be reversed after reboot'
+    return 1
+  fi
+  d__context -- pop
+  d__context -- push 'Executing reverse tilde-switch script'
+  source "$D_TILDE_UNS_PATH" &>/dev/null
+  if (($?)); then
+    d__fail -- 'Error code agter sourcing reverse tilde-switch script at:' \
+      -i- "$D_TILDE_UNS_PATH"
+    return 1
+  fi
+  d__context -- lop
+  return 0
 }

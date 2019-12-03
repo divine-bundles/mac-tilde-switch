@@ -1,1 +1,3 @@
-* [**`improvement`**] Execute the unswitch script during the removal of the `mac-tilde-switch` deployment, so that the changes come into effect immediately.
+* Deployment `mac-tilde-switch`:
+  * [**`fix`**] (Un)set stash records during installations/removals.
+  * [**`improvement`**] Execute the unswitch script during the removal, so that the changes come into effect immediately.
