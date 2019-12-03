@@ -1,0 +1,1 @@
+* [**`improvement`**] Execute the unswitch script during the removal of the `mac-tilde-switch` deployment, so that the changes come into effect immediately.

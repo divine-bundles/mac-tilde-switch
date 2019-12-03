@@ -1,8 +1,8 @@
 #:title:        Divine deployment: mac-tilde-switch
 #:author:       Grove Pyree
 #:email:        grayarea@protonmail.ch
-#:revdate:      2019.12.01
-#:revremark:    Initial commit
+#:revdate:      2019.12.03
+#:revremark:    Execute unswitch script on removal
 #:created_at:   2019.06.30
 
 D_DPL_NAME='mac-tilde-switch'
@@ -81,5 +81,6 @@ d_dpl_remove()
     "${els[@]}" || return 1
   local cmd='rm'; d__require_wfile "$D_TILDE_PLIST_PATH" || cmd='sudo rm'
   if d__cmd $cmd -f -- --PLIST_PATH-- "$D_TILDE_PLIST_PATH" "${els[@]}"
-  then d__context -- lop; return 0; else return 1; fi
+  then source "$D_TILDE_UNS_PATH" &>/dev/null; d__context -- lop; return 0
+  else return 1; fi
 }
